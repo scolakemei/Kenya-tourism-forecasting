@@ -184,5 +184,3 @@ elif page == "Conclusion":
 - Prophet struggled with small dataset size
 
 ### 🏆 Final Decision:
-else:
-    st.info("Please upload a dataset to begin forecasting.")
