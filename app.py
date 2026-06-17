@@ -16,16 +16,24 @@ st.set_page_config(
 )
 
 # -----------------------------
-# CLEAN THEME
+# CLEAN TOURISM THEME (NO BLUR ISSUE FIXED)
 # -----------------------------
 st.markdown(
     """
     <style>
 
+    /* MAIN BACKGROUND - CLEAN SOLID (NO OVERLAY BLUR) */
     .stApp {
         background-color: #F5F7FA;
     }
 
+    /* REMOVE ANY TRANSPARENT LAYER ISSUES */
+    .block-container {
+        background-color: #F5F7FA;
+        padding: 2rem;
+    }
+
+    /* SIDEBAR */
     section[data-testid="stSidebar"] {
         background-color: #0B3D2E;
     }
@@ -34,19 +42,40 @@ st.markdown(
         color: white;
     }
 
-    h1, h2, h3 {
+    /* HEADINGS */
+    h1 {
         color: #0B3D2E;
+        font-weight: 700;
     }
 
+    h2, h3 {
+        color: #1B5E20;
+    }
+
+    /* BUTTONS */
     .stButton > button {
         background-color: #1B7F5A;
         color: white;
         border-radius: 8px;
+        border: none;
         padding: 0.5rem 1rem;
     }
 
     .stButton > button:hover {
         background-color: #145C42;
+    }
+
+    /* METRICS */
+    div[data-testid="metric-container"] {
+        background-color: #E8F5E9;
+        border-radius: 10px;
+        padding: 1rem;
+        border: 1px solid #C8E6C9;
+    }
+
+    /* TABLE FIX */
+    table {
+        color: black !important;
     }
 
     </style>
@@ -67,14 +96,16 @@ def load_data():
     return df
 
 df = load_data()
-
 y = df["TOURIST ARRIVALS"]
 last_date = df.index[-1]
 
 # -----------------------------
-# MODEL FIT (ONCE)
+# FIT MODELS ONCE
 # -----------------------------
-sarima_model = SARIMAX(y, order=(1,0,1), seasonal_order=(1,1,1,12)).fit(disp=False)
+sarima_model = SARIMAX(
+    y, order=(1,0,1), seasonal_order=(1,1,1,12)
+).fit(disp=False)
+
 arima_model = ARIMA(y, order=(1,1,1)).fit()
 
 hw_model = ExponentialSmoothing(
@@ -88,36 +119,32 @@ prophet_model.fit(prophet_df)
 # -----------------------------
 # FORECAST FUNCTION
 # -----------------------------
-def generate_forecast(months_ahead, model_name):
-
-    if model_name == "SARIMA":
-        return sarima_model.forecast(months_ahead)
-
-    elif model_name == "ARIMA":
-        return arima_model.forecast(months_ahead)
-
-    elif model_name == "Holt-Winters":
-        return hw_model.forecast(months_ahead)
-
+def forecast_model(model, steps, name):
+    if name == "SARIMA":
+        return sarima_model.forecast(steps)
+    elif name == "ARIMA":
+        return arima_model.forecast(steps)
+    elif name == "Holt-Winters":
+        return hw_model.forecast(steps)
     else:
-        future = prophet_model.make_future_dataframe(months_ahead, freq="MS")
+        future = prophet_model.make_future_dataframe(steps, freq="MS")
         pred = prophet_model.predict(future)
-        return pred["yhat"].tail(months_ahead)
+        return pred["yhat"].tail(steps)
 
 # -----------------------------
 # SIDEBAR NAVIGATION
 # -----------------------------
 page = st.sidebar.radio(
     "📍 Navigation",
-    ["🏠 Main Forecast", "📊 Dashboard (2026–2027)", "📋 Metrics", "📌 Conclusion"]
+    ["🏠 Forecasting", "📊 Dashboard (2026–2027)", "📋 Metrics", "📌 Conclusion"]
 )
 
 # -----------------------------
-# MAIN PAGE (FORECASTING)
+# MAIN FORECAST PAGE
 # -----------------------------
-if page == "🏠 Main Forecast":
+if page == "🏠 Forecasting":
 
-    st.title("📊 Kenya Tourism Forecasting System")
+    st.title("📊 Kenya Tourism Forecasting")
 
     model_choice = st.selectbox(
         "Select Model",
@@ -134,10 +161,10 @@ if page == "🏠 Main Forecast":
         )
 
         if months_ahead <= 0:
-            st.error("Choose a future date")
+            st.error("Select a future date")
         else:
 
-            forecast = generate_forecast(months_ahead, model_choice)
+            forecast = forecast_model(None, months_ahead, model_choice)
 
             prediction = forecast.iloc[-1]
 
@@ -162,31 +189,48 @@ if page == "🏠 Main Forecast":
             st.pyplot(fig)
 
 # -----------------------------
-# DASHBOARD PAGE (2026–2027)
+# DASHBOARD PAGE (FIXED CHART DISPLAY)
 # -----------------------------
 elif page == "📊 Dashboard (2026–2027)":
 
-    st.title("📈 Forecast Overview (2026–2027)")
+    st.title("📈 SARIMA Forecast (2026–2027)")
 
-    forecast = sarima_model.forecast(24)
-
-    future_dates = pd.date_range(
-        start=last_date + pd.DateOffset(months=1),
-        periods=24,
-        freq="MS"
+    # EXPECTS CSV FROM YOUR COLAB OUTPUT
+    df_forecast = pd.read_csv(
+        "sarima_forecast/tourist_arrivals_forecast_2026_2027.csv"
     )
 
+    df_forecast.columns = ["Date", "Forecast", "Lower", "Upper"]
+    df_forecast["Date"] = pd.to_datetime(df_forecast["Date"])
+
     fig, ax = plt.subplots()
-    ax.plot(future_dates, forecast)
-    ax.set_title("Tourism Forecast 2026–2027 (SARIMA)")
+
+    ax.plot(df_forecast["Date"], df_forecast["Forecast"], color="#1B7F5A")
+
+    ax.fill_between(
+        df_forecast["Date"],
+        df_forecast["Lower"],
+        df_forecast["Upper"],
+        color="lightgreen",
+        alpha=0.3
+    )
+
+    ax.set_title("Tourism Forecast (2026–2027) - SARIMA")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Tourist Arrivals")
+
+    plt.xticks(rotation=45)
+
     st.pyplot(fig)
+
+    st.dataframe(df_forecast)
 
 # -----------------------------
 # METRICS PAGE
 # -----------------------------
 elif page == "📋 Metrics":
 
-    st.title("📊 Model Performance Metrics")
+    st.title("📊 Model Performance")
 
     metrics = pd.DataFrame({
         "Model": ["SARIMA", "Holt-Winters", "ARIMA", "Prophet"],
@@ -205,11 +249,13 @@ elif page == "📌 Conclusion":
     st.title("📌 Conclusion")
 
     st.markdown("""
-    - SARIMA performed best across all metrics  
-    - Tourism data shows strong seasonality  
-    - Holt-Winters performed moderately well  
-    - ARIMA and Prophet underperformed  
+    - SARIMA is the best performing model  
+    - Strong seasonality in tourism data  
+    - Holt-Winters performs moderately well  
+    - ARIMA & Prophet underperform  
 
-    ### 🏆 Final Recommendation:
+    ### 🏆 Recommendation:
+    SARIMA is the most suitable model for Kenya tourism forecasting
+    """)
     **SARIMA is the best model for forecasting tourism arrivals in Kenya**
     """)
