@@ -16,24 +16,21 @@ st.set_page_config(
 )
 
 # -----------------------------
-# CLEAN TOURISM THEME (NO BLUR ISSUE FIXED)
+# CLEAN THEME
 # -----------------------------
 st.markdown(
     """
     <style>
 
-    /* MAIN BACKGROUND (SKY BLUE GRADIENT) */
     .stApp {
         background: linear-gradient(to bottom right, #4FC3F7, #01579B);
         color: white;
     }
 
-    /* FIX TEXT COLOR (VERY IMPORTANT) */
     h1, h2, h3, p, div, span {
         color: white !important;
     }
 
-    /* SIDEBAR (OCEAN BLUE) */
     section[data-testid="stSidebar"] {
         background-color: #003B73;
     }
@@ -42,14 +39,12 @@ st.markdown(
         color: white !important;
     }
 
-    /* MAIN CONTAINER (GLASS EFFECT - NOT BLUR) */
     .block-container {
         background-color: rgba(0, 0, 0, 0.15);
         padding: 2rem;
         border-radius: 12px;
     }
 
-    /* BUTTONS (OCEAN GREENISH BLUE) */
     .stButton > button {
         background-color: #00A6FB;
         color: white;
@@ -63,43 +58,54 @@ st.markdown(
         background-color: #0077B6;
     }
 
-    /* METRICS CARDS */
-    div[data-testid="metric-container"] {
-        background-color: rgba(255,255,255,0.15);
-        border-radius: 10px;
-        padding: 1rem;
-        border: 1px solid rgba(255,255,255,0.3);
-        color: white !important;
-    }
-
-    /* TABLES */
-    table {
-        color: white !important;
-    }
-
     </style>
     """,
     unsafe_allow_html=True
 )
 
 # -----------------------------
-# LOAD DATA
+# 📂 UPLOAD DATASET FEATURE (NEW)
+# -----------------------------
+st.sidebar.title("📂 Dataset Option")
+
+uploaded_file = st.sidebar.file_uploader(
+    "Upload CSV or Excel (optional)",
+    type=["csv", "xlsx"]
+)
+
+# -----------------------------
+# LOAD DATA (DEFAULT OR UPLOADED)
 # -----------------------------
 @st.cache_data
-def load_data():
+def load_default():
     df = pd.read_excel("TOURIST_ARRIVALS_DATA.xlsx")
-    df["DATE"] = pd.to_datetime(df["DATE"])
-    df = df.sort_values("DATE")
-    df = df.set_index("DATE")
-    df = df.asfreq("MS")
     return df
 
-df = load_data()
-y = df["TOURIST ARRIVALS"]
+if uploaded_file is not None:
+
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_excel(uploaded_file)
+
+    st.sidebar.success("Custom dataset loaded!")
+
+else:
+    df = load_default()
+
+# -----------------------------
+# CLEAN DATA (IMPORTANT)
+# -----------------------------
+df["DATE"] = pd.to_datetime(df["DATE"])
+df = df.sort_values("DATE")
+df = df.set_index("DATE")
+df = df.asfreq("MS")
+
+y = df.iloc[:, 0]
 last_date = df.index[-1]
 
 # -----------------------------
-# FIT MODELS ONCE
+# FIT MODELS
 # -----------------------------
 sarima_model = SARIMAX(
     y, order=(1,0,1), seasonal_order=(1,1,1,12)
@@ -131,7 +137,7 @@ def forecast_model(model, steps, name):
         return pred["yhat"].tail(steps)
 
 # -----------------------------
-# SIDEBAR NAVIGATION
+# NAVIGATION
 # -----------------------------
 page = st.sidebar.radio(
     "📍 Navigation",
@@ -139,11 +145,11 @@ page = st.sidebar.radio(
 )
 
 # -----------------------------
-# MAIN FORECAST PAGE
+# FORECAST PAGE
 # -----------------------------
 if page == "🏠 Forecasting":
 
-    st.title("📊 Kenya Tourism Forecasting")
+    st.title("📊 Forecasting System")
 
     model_choice = st.selectbox(
         "Select Model",
@@ -165,9 +171,7 @@ if page == "🏠 Forecasting":
 
             forecast = forecast_model(None, months_ahead, model_choice)
 
-            prediction = forecast.iloc[-1]
-
-            st.metric("Forecast", f"{prediction:,.0f}")
+            st.metric("Forecast", f"{forecast.iloc[-1]:,.0f}")
 
             future_dates = pd.date_range(
                 last_date + pd.DateOffset(months=1),
@@ -183,25 +187,18 @@ if page == "🏠 Forecasting":
             st.dataframe(result)
 
             fig, ax = plt.subplots()
-            ax.plot(result["Date"], result["Forecast"], marker="o")
-            ax.set_title(f"{model_choice} Forecast")
+            ax.plot(result["Date"], result["Forecast"])
             st.pyplot(fig)
 
 # -----------------------------
-# DASHBOARD PAGE (FIXED CHART DISPLAY)
+# DASHBOARD (ACTUAL + FORECAST)
 # -----------------------------
 elif page == "📊 Dashboard (2026–2027)":
 
     st.title("📈 Actual vs Forecast (SARIMA)")
 
-    # -----------------------------
-    # LOAD DATASET (ACTUAL DATA)
-    # -----------------------------
     df_actual = df.copy()
 
-    # -----------------------------
-    # FORECAST (24 MONTHS)
-    # -----------------------------
     forecast_steps = 24
     forecast_values = sarima_model.forecast(forecast_steps)
 
@@ -216,47 +213,18 @@ elif page == "📊 Dashboard (2026–2027)":
         "Forecast": forecast_values
     })
 
-    # -----------------------------
-    # PLOT BOTH TOGETHER
-    # -----------------------------
     fig, ax = plt.subplots()
 
-    # ACTUAL DATA
-    ax.plot(
-        df_actual.index,
-        df_actual["TOURIST ARRIVALS"],
-        label="Actual Data",
-        color="#003B73",
-        linewidth=2
-    )
-
-    # FORECAST DATA
-    ax.plot(
-        df_forecast["Date"],
-        df_forecast["Forecast"],
-        label="SARIMA Forecast",
-        color="#00A6FB",
-        linewidth=2
-    )
-
-    ax.set_title("Kenya Tourism: Actual vs Forecast (SARIMA)")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Tourist Arrivals")
+    ax.plot(df_actual.index, df_actual.iloc[:, 0], label="Actual Data")
+    ax.plot(df_forecast["Date"], df_forecast["Forecast"], label="Forecast")
 
     ax.legend()
-
-    plt.xticks(rotation=45)
-
     st.pyplot(fig)
 
-    # -----------------------------
-    # TABLE OUTPUT
-    # -----------------------------
-    st.subheader("Forecast Table")
     st.dataframe(df_forecast)
 
 # -----------------------------
-# METRICS PAGE
+# METRICS
 # -----------------------------
 elif page == "📋 Metrics":
 
@@ -272,19 +240,15 @@ elif page == "📋 Metrics":
     st.dataframe(metrics)
 
 # -----------------------------
-# CONCLUSION PAGE
+# CONCLUSION
 # -----------------------------
 elif page == "📌 Conclusion":
 
     st.title("📌 Conclusion")
 
     st.markdown("""
-    - SARIMA is the best performing model  
+    - SARIMA is best performing model  
     - Strong seasonality in tourism data  
-    - Holt-Winters performs moderately well  
-    - ARIMA & Prophet underperform  
-
-    ### 🏆 Recommendation:
-    SARIMA is the most suitable model for Kenya tourism forecasting
+    - Holt-Winters is second best  
+    - ARIMA and Prophet underperform  
     """)
-    
