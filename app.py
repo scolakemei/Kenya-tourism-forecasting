@@ -32,7 +32,6 @@ df = load_data()
 sarima_forecast = pd.read_csv("sarima_forecast.csv")
 arima_forecast = pd.read_csv("arima_forecast.csv")
 hw_forecast = pd.read_csv("hw_forecast.csv")
-prophet_forecast = pd.read_csv("prophet_forecast.csv")
 
 # Ensure correct column name fallback
 def get_forecast(df):
