@@ -257,5 +257,4 @@ elif page == "📌 Conclusion":
     ### 🏆 Recommendation:
     SARIMA is the most suitable model for Kenya tourism forecasting
     """)
-    **SARIMA is the best model for forecasting tourism arrivals in Kenya**
-    """)
+    
