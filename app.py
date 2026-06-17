@@ -19,7 +19,7 @@ st.write("A comparison of ARIMA, SARIMA, Prophet, and Holt-Winters models for fo
 # -----------------------------
 @st.cache_data
 def load_data():
-    df = pd.read_excel("TOURIST ARRIVALS DATA.xlsx")
+    df = pd.read_excel("TOURIST_ARRIVALS_DATA.xlsx")
     df['DATE'] = pd.to_datetime(df['DATE'])
     df = df.set_index('DATE')
     df = df.asfreq('MS')
