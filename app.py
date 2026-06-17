@@ -192,44 +192,67 @@ if page == "🏠 Forecasting":
 # -----------------------------
 elif page == "📊 Dashboard (2026–2027)":
 
-    st.title("📈 SARIMA Forecast (2026–2027)")
+    st.title("📈 Actual vs Forecast (SARIMA)")
 
-    # LOAD EXCEL FILE
-    df_forecast = pd.read_excel(
-        "tourist_arrivals_forecast_2026_2027.xlsx",
-        engine="openpyxl"
+    # -----------------------------
+    # LOAD DATASET (ACTUAL DATA)
+    # -----------------------------
+    df_actual = df.copy()
+
+    # -----------------------------
+    # FORECAST (24 MONTHS)
+    # -----------------------------
+    forecast_steps = 24
+    forecast_values = sarima_model.forecast(forecast_steps)
+
+    future_dates = pd.date_range(
+        start=df_actual.index[-1] + pd.DateOffset(months=1),
+        periods=forecast_steps,
+        freq="MS"
     )
 
-    # FIX COLUMN ISSUES FROM COLAB EXPORT
-    if "Unnamed: 0" in df_forecast.columns:
-        df_forecast = df_forecast.drop(columns=["Unnamed: 0"])
+    df_forecast = pd.DataFrame({
+        "Date": future_dates,
+        "Forecast": forecast_values
+    })
 
-    # Rename columns safely
-    df_forecast.columns = ["Date", "Forecast", "Lower", "Upper"]
-
-    df_forecast["Date"] = pd.to_datetime(df_forecast["Date"])
-
-    # PLOT
+    # -----------------------------
+    # PLOT BOTH TOGETHER
+    # -----------------------------
     fig, ax = plt.subplots()
 
-    ax.plot(df_forecast["Date"], df_forecast["Forecast"], color="#00A6FB")
-
-    ax.fill_between(
-        df_forecast["Date"],
-        df_forecast["Lower"],
-        df_forecast["Upper"],
-        color="skyblue",
-        alpha=0.3
+    # ACTUAL DATA
+    ax.plot(
+        df_actual.index,
+        df_actual["TOURIST ARRIVALS"],
+        label="Actual Data",
+        color="#003B73",
+        linewidth=2
     )
 
-    ax.set_title("Kenya Tourism Forecast (2026–2027)")
+    # FORECAST DATA
+    ax.plot(
+        df_forecast["Date"],
+        df_forecast["Forecast"],
+        label="SARIMA Forecast",
+        color="#00A6FB",
+        linewidth=2
+    )
+
+    ax.set_title("Kenya Tourism: Actual vs Forecast (SARIMA)")
     ax.set_xlabel("Date")
     ax.set_ylabel("Tourist Arrivals")
+
+    ax.legend()
 
     plt.xticks(rotation=45)
 
     st.pyplot(fig)
 
+    # -----------------------------
+    # TABLE OUTPUT
+    # -----------------------------
+    st.subheader("Forecast Table")
     st.dataframe(df_forecast)
 
 # -----------------------------
