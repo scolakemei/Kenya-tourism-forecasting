@@ -204,4 +204,3 @@ if uploaded_file is not None:
 
 else:
     st.info("Please upload a dataset to begin forecasting.")
-**SARIMA is the recommended model for Kenya tourism forecasting.**
