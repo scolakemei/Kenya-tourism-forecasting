@@ -194,16 +194,22 @@ elif page == "📊 Dashboard (2026–2027)":
 
     st.title("📈 SARIMA Forecast (2026–2027)")
 
-    # SAFE LOAD (NO FOLDER ISSUES)
-    df_forecast = pd.read_csv("tourist_arrivals_forecast_2026_2027.csv")
+    # LOAD EXCEL FILE
+    df_forecast = pd.read_excel(
+        "tourist_arrivals_forecast_2026_2027.xlsx",
+        engine="openpyxl"
+    )
 
-    # if your file has unnamed index column (common from Colab)
+    # FIX COLUMN ISSUES FROM COLAB EXPORT
     if "Unnamed: 0" in df_forecast.columns:
         df_forecast = df_forecast.drop(columns=["Unnamed: 0"])
 
+    # Rename columns safely
     df_forecast.columns = ["Date", "Forecast", "Lower", "Upper"]
+
     df_forecast["Date"] = pd.to_datetime(df_forecast["Date"])
 
+    # PLOT
     fig, ax = plt.subplots()
 
     ax.plot(df_forecast["Date"], df_forecast["Forecast"], color="#00A6FB")
@@ -216,7 +222,7 @@ elif page == "📊 Dashboard (2026–2027)":
         alpha=0.3
     )
 
-    ax.set_title("Tourism Forecast 2026–2027 (SARIMA)")
+    ax.set_title("Kenya Tourism Forecast (2026–2027)")
     ax.set_xlabel("Date")
     ax.set_ylabel("Tourist Arrivals")
 
