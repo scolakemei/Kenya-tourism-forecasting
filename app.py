@@ -22,60 +22,59 @@ st.markdown(
     """
     <style>
 
-    /* MAIN BACKGROUND - CLEAN SOLID (NO OVERLAY BLUR) */
+    /* MAIN BACKGROUND (SKY BLUE GRADIENT) */
     .stApp {
-        background-color: #F5F7FA;
-    }
-
-    /* REMOVE ANY TRANSPARENT LAYER ISSUES */
-    .block-container {
-        background-color: #F5F7FA;
-        padding: 2rem;
-    }
-
-    /* SIDEBAR */
-    section[data-testid="stSidebar"] {
-        background-color: #0B3D2E;
-    }
-
-    section[data-testid="stSidebar"] * {
+        background: linear-gradient(to bottom right, #4FC3F7, #01579B);
         color: white;
     }
 
-    /* HEADINGS */
-    h1 {
-        color: #0B3D2E;
-        font-weight: 700;
+    /* FIX TEXT COLOR (VERY IMPORTANT) */
+    h1, h2, h3, p, div, span {
+        color: white !important;
     }
 
-    h2, h3 {
-        color: #1B5E20;
+    /* SIDEBAR (OCEAN BLUE) */
+    section[data-testid="stSidebar"] {
+        background-color: #003B73;
     }
 
-    /* BUTTONS */
+    section[data-testid="stSidebar"] * {
+        color: white !important;
+    }
+
+    /* MAIN CONTAINER (GLASS EFFECT - NOT BLUR) */
+    .block-container {
+        background-color: rgba(0, 0, 0, 0.15);
+        padding: 2rem;
+        border-radius: 12px;
+    }
+
+    /* BUTTONS (OCEAN GREENISH BLUE) */
     .stButton > button {
-        background-color: #1B7F5A;
+        background-color: #00A6FB;
         color: white;
         border-radius: 8px;
         border: none;
         padding: 0.5rem 1rem;
+        font-weight: bold;
     }
 
     .stButton > button:hover {
-        background-color: #145C42;
+        background-color: #0077B6;
     }
 
-    /* METRICS */
+    /* METRICS CARDS */
     div[data-testid="metric-container"] {
-        background-color: #E8F5E9;
+        background-color: rgba(255,255,255,0.15);
         border-radius: 10px;
         padding: 1rem;
-        border: 1px solid #C8E6C9;
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white !important;
     }
 
-    /* TABLE FIX */
+    /* TABLES */
     table {
-        color: black !important;
+        color: white !important;
     }
 
     </style>
