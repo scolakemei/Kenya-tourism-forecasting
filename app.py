@@ -16,57 +16,48 @@ st.set_page_config(
 )
 
 # -----------------------------
-# CLEAN THEME
+# CLEAN TOURISM THEME
 # -----------------------------
-st.markdown(
-    """
-    <style>
+st.markdown("""
+<style>
 
-    .stApp {
-        background: linear-gradient(to bottom right, #4FC3F7, #01579B);
-        color: white;
-    }
+.stApp {
+    background: linear-gradient(to bottom right, #4FC3F7, #01579B);
+    color: white;
+}
 
-    h1, h2, h3, p, div, span {
-        color: white !important;
-    }
+h1, h2, h3, p, div, span {
+    color: white !important;
+}
 
-    section[data-testid="stSidebar"] {
-        background-color: #003B73;
-    }
+section[data-testid="stSidebar"] {
+    background-color: #003B73;
+}
 
-    section[data-testid="stSidebar"] * {
-        color: white !important;
-    }
+section[data-testid="stSidebar"] * {
+    color: white !important;
+}
 
-    .block-container {
-        background-color: rgba(0, 0, 0, 0.15);
-        padding: 2rem;
-        border-radius: 12px;
-    }
+.block-container {
+    background-color: rgba(0, 0, 0, 0.15);
+    padding: 2rem;
+    border-radius: 12px;
+}
 
-    .stButton > button {
-        background-color: #00A6FB;
-        color: white;
-        border-radius: 8px;
-        border: none;
-        padding: 0.5rem 1rem;
-        font-weight: bold;
-    }
+.stButton > button {
+    background-color: #00A6FB;
+    color: white;
+    border-radius: 8px;
+    border: none;
+}
 
-    .stButton > button:hover {
-        background-color: #0077B6;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------------
-# 📂 UPLOAD DATASET FEATURE (NEW)
+# UPLOAD DATASET
 # -----------------------------
-st.sidebar.title("📂 Dataset Option")
+st.sidebar.title("📂 Dataset")
 
 uploaded_file = st.sidebar.file_uploader(
     "Upload CSV or Excel (optional)",
@@ -74,32 +65,32 @@ uploaded_file = st.sidebar.file_uploader(
 )
 
 # -----------------------------
-# LOAD DATA (DEFAULT OR UPLOADED)
+# LOAD DATA
 # -----------------------------
 @st.cache_data
 def load_default():
-    df = pd.read_excel("TOURIST_ARRIVALS_DATA.xlsx")
-    return df
+    return pd.read_excel("TOURIST_ARRIVALS_DATA.xlsx")
 
 if uploaded_file is not None:
-
     if uploaded_file.name.endswith(".csv"):
         df = pd.read_csv(uploaded_file)
     else:
         df = pd.read_excel(uploaded_file)
-
     st.sidebar.success("Custom dataset loaded!")
-
 else:
     df = load_default()
 
 # -----------------------------
-# CLEAN DATA (IMPORTANT)
+# CLEAN DATA (FIX VALUE ERROR)
 # -----------------------------
-df["DATE"] = pd.to_datetime(df["DATE"])
+df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
 df = df.sort_values("DATE")
 df = df.set_index("DATE")
 df = df.asfreq("MS")
+
+# FORCE NUMERIC CLEANING (CRITICAL FIX)
+df.iloc[:, 0] = pd.to_numeric(df.iloc[:, 0], errors="coerce")
+df = df.dropna()
 
 y = df.iloc[:, 0]
 last_date = df.index[-1]
@@ -124,7 +115,7 @@ prophet_model.fit(prophet_df)
 # -----------------------------
 # FORECAST FUNCTION
 # -----------------------------
-def forecast_model(model, steps, name):
+def forecast_model(name, steps):
     if name == "SARIMA":
         return sarima_model.forecast(steps)
     elif name == "ARIMA":
@@ -140,16 +131,16 @@ def forecast_model(model, steps, name):
 # NAVIGATION
 # -----------------------------
 page = st.sidebar.radio(
-    "📍 Navigation",
-    ["🏠 Forecasting", "📊 Dashboard (2026–2027)", "📋 Metrics", "📌 Conclusion"]
+    "Navigation",
+    ["Forecasting", "Dashboard (2026–2027)", "Metrics", "Conclusion"]
 )
 
 # -----------------------------
 # FORECAST PAGE
 # -----------------------------
-if page == "🏠 Forecasting":
+if page == "Forecasting":
 
-    st.title("📊 Forecasting System")
+    st.title("📊 Forecasting")
 
     model_choice = st.selectbox(
         "Select Model",
@@ -169,7 +160,7 @@ if page == "🏠 Forecasting":
             st.error("Select a future date")
         else:
 
-            forecast = forecast_model(None, months_ahead, model_choice)
+            forecast = forecast_model(model_choice, months_ahead)
 
             st.metric("Forecast", f"{forecast.iloc[-1]:,.0f}")
 
@@ -193,17 +184,15 @@ if page == "🏠 Forecasting":
 # -----------------------------
 # DASHBOARD (ACTUAL + FORECAST)
 # -----------------------------
-elif page == "📊 Dashboard (2026–2027)":
+elif page == "Dashboard (2026–2027)":
 
     st.title("📈 Actual vs Forecast (SARIMA)")
-
-    df_actual = df.copy()
 
     forecast_steps = 24
     forecast_values = sarima_model.forecast(forecast_steps)
 
     future_dates = pd.date_range(
-        start=df_actual.index[-1] + pd.DateOffset(months=1),
+        start=df.index[-1] + pd.DateOffset(months=1),
         periods=forecast_steps,
         freq="MS"
     )
@@ -215,7 +204,7 @@ elif page == "📊 Dashboard (2026–2027)":
 
     fig, ax = plt.subplots()
 
-    ax.plot(df_actual.index, df_actual.iloc[:, 0], label="Actual Data")
+    ax.plot(df.index, df.iloc[:, 0], label="Actual Data")
     ax.plot(df_forecast["Date"], df_forecast["Forecast"], label="Forecast")
 
     ax.legend()
@@ -226,7 +215,7 @@ elif page == "📊 Dashboard (2026–2027)":
 # -----------------------------
 # METRICS
 # -----------------------------
-elif page == "📋 Metrics":
+elif page == "Metrics":
 
     st.title("📊 Model Performance")
 
@@ -242,12 +231,12 @@ elif page == "📋 Metrics":
 # -----------------------------
 # CONCLUSION
 # -----------------------------
-elif page == "📌 Conclusion":
+elif page == "Conclusion":
 
     st.title("📌 Conclusion")
 
     st.markdown("""
-    - SARIMA is best performing model  
+    - SARIMA performs best  
     - Strong seasonality in tourism data  
     - Holt-Winters is second best  
     - ARIMA and Prophet underperform  
