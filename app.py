@@ -27,24 +27,19 @@ def load_data():
 df = load_data()
 
 # -----------------------------
-# LOAD FORECASTS (CSV ONLY - STABLE)
+# LOAD FORECAST FILES (CSV ONLY)
 # -----------------------------
 sarima_forecast = pd.read_csv("sarima_forecast.csv")
 arima_forecast = pd.read_csv("arima_forecast.csv")
 hw_forecast = pd.read_csv("hw_forecast.csv")
 prophet_forecast = pd.read_csv("prophet_forecast.csv")
 
-# Ensure correct column name fallback
-def get_forecast(df):
-    if "Forecast" in df.columns:
-        return df["Forecast"].values
-    elif df.shape[1] >= 1:
-        return df.iloc[:, 0].values
-    else:
-        return []
+# Helper function (handles column issues safely)
+def get_values(df):
+    return df.iloc[:, 0].values
 
 # -----------------------------
-# SIDEBAR MENU
+# SIDEBAR
 # -----------------------------
 st.sidebar.title("Navigation")
 page = st.sidebar.radio(
@@ -53,24 +48,20 @@ page = st.sidebar.radio(
 )
 
 # -----------------------------
-# PAGE 1: DATASET OVERVIEW
+# PAGE 1: DATASET
 # -----------------------------
 if page == "Dataset Overview":
     st.header("📌 Dataset Overview")
 
-    st.subheader("Raw Data")
     st.dataframe(df)
-
-    st.subheader("Tourist Arrivals Trend")
 
     fig, ax = plt.subplots()
     ax.plot(df.index, df.iloc[:, 0])
     ax.set_title("Monthly Tourist Arrivals (2019–2023)")
-    ax.set_xlabel("Year")
+    ax.set_xlabel("Date")
     ax.set_ylabel("Arrivals")
     st.pyplot(fig)
 
-    st.subheader("Summary Statistics")
     st.write(df.iloc[:, 0].describe())
 
 # -----------------------------
@@ -88,7 +79,7 @@ elif page == "Model Comparison":
 
     st.dataframe(metrics)
 
-    st.success("🏆 Best Performing Model: SARIMA")
+    st.success("🏆 Best Model: SARIMA")
 
     fig, ax = plt.subplots()
     ax.bar(metrics["Model"], metrics["MAPE (%)"])
@@ -111,24 +102,33 @@ elif page == "Forecasting":
 
     if st.button("Generate Forecast"):
 
+        # -------------------------
+        # SELECT FORECAST VALUES
+        # -------------------------
         if model_choice == "SARIMA":
-            forecast = get_forecast(sarima_forecast)
+            forecast = get_values(sarima_forecast)
 
         elif model_choice == "ARIMA":
-            forecast = get_forecast(arima_forecast)
+            forecast = get_values(arima_forecast)
 
         elif model_choice == "Holt-Winters":
-            forecast = get_forecast(hw_forecast)
+            forecast = get_values(hw_forecast)
 
         else:
-            forecast = get_forecast(prophet_forecast)
+            forecast = get_values(prophet_forecast)
 
+        # -------------------------
+        # CREATE FUTURE DATES
+        # -------------------------
         future_dates = pd.date_range(
-            start=df.index[-1],
-            periods=periods + 1,
+            start=df.index[-1] + pd.DateOffset(months=1),
+            periods=periods,
             freq='MS'
-        )[1:]
+        )
 
+        # -------------------------
+        # FINAL RESULT TABLE
+        # -------------------------
         result = pd.DataFrame({
             "Date": future_dates,
             "Forecast": forecast[:periods]
@@ -137,6 +137,9 @@ elif page == "Forecasting":
         st.subheader(f"{model_choice} Forecast Results")
         st.dataframe(result)
 
+        # -------------------------
+        # PLOT
+        # -------------------------
         fig, ax = plt.subplots()
         ax.plot(result["Date"], result["Forecast"], marker="o")
         ax.set_title(f"{model_choice} Forecast")
@@ -145,7 +148,11 @@ elif page == "Forecasting":
         plt.xticks(rotation=45)
         st.pyplot(fig)
 
+        # -------------------------
+        # DOWNLOAD
+        # -------------------------
         csv = result.to_csv(index=False)
+
         st.download_button(
             "📥 Download Forecast CSV",
             csv,
@@ -163,7 +170,7 @@ elif page == "Conclusion":
 - SARIMA performed best with lowest error (MAPE = 5.57%)
 - Holt-Winters captured smoothing effects well
 - ARIMA underperformed due to seasonality
-- Prophet was less effective for small yearly dataset
+- Prophet struggled with small seasonal dataset
 
 ### 🏆 Final Decision:
 **SARIMA is the recommended model for forecasting tourism arrivals in Kenya.**
