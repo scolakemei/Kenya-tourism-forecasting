@@ -194,27 +194,29 @@ elif page == "📊 Dashboard (2026–2027)":
 
     st.title("📈 SARIMA Forecast (2026–2027)")
 
-    # EXPECTS CSV FROM YOUR COLAB OUTPUT
-    df_forecast = pd.read_csv(
-        "sarima_forecast/tourist_arrivals_forecast_2026_2027.csv"
-    )
+    # SAFE LOAD (NO FOLDER ISSUES)
+    df_forecast = pd.read_csv("tourist_arrivals_forecast_2026_2027.csv")
+
+    # if your file has unnamed index column (common from Colab)
+    if "Unnamed: 0" in df_forecast.columns:
+        df_forecast = df_forecast.drop(columns=["Unnamed: 0"])
 
     df_forecast.columns = ["Date", "Forecast", "Lower", "Upper"]
     df_forecast["Date"] = pd.to_datetime(df_forecast["Date"])
 
     fig, ax = plt.subplots()
 
-    ax.plot(df_forecast["Date"], df_forecast["Forecast"], color="#1B7F5A")
+    ax.plot(df_forecast["Date"], df_forecast["Forecast"], color="#00A6FB")
 
     ax.fill_between(
         df_forecast["Date"],
         df_forecast["Lower"],
         df_forecast["Upper"],
-        color="lightgreen",
+        color="skyblue",
         alpha=0.3
     )
 
-    ax.set_title("Tourism Forecast (2026–2027) - SARIMA")
+    ax.set_title("Tourism Forecast 2026–2027 (SARIMA)")
     ax.set_xlabel("Date")
     ax.set_ylabel("Tourist Arrivals")
 
