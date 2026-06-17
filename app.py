@@ -2,6 +2,11 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from prophet import Prophet
+
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
@@ -10,8 +15,44 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 Kenya Tourism Forecasting Dashboard")
-st.write("Comparison of ARIMA, SARIMA, Prophet, and Holt-Winters forecasting models.")
+# -----------------------------
+# CLEAN THEME
+# -----------------------------
+st.markdown(
+    """
+    <style>
+
+    .stApp {
+        background-color: #F5F7FA;
+    }
+
+    section[data-testid="stSidebar"] {
+        background-color: #0B3D2E;
+    }
+
+    section[data-testid="stSidebar"] * {
+        color: white;
+    }
+
+    h1, h2, h3 {
+        color: #0B3D2E;
+    }
+
+    .stButton > button {
+        background-color: #1B7F5A;
+        color: white;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+    }
+
+    .stButton > button:hover {
+        background-color: #145C42;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # -----------------------------
 # LOAD DATA
@@ -19,67 +60,133 @@ st.write("Comparison of ARIMA, SARIMA, Prophet, and Holt-Winters forecasting mod
 @st.cache_data
 def load_data():
     df = pd.read_excel("TOURIST_ARRIVALS_DATA.xlsx")
-    df['DATE'] = pd.to_datetime(df['DATE'])
-    df = df.set_index('DATE')
-    df = df.asfreq('MS')
+    df["DATE"] = pd.to_datetime(df["DATE"])
+    df = df.sort_values("DATE")
+    df = df.set_index("DATE")
+    df = df.asfreq("MS")
     return df
 
 df = load_data()
 
-# -----------------------------
-# LOAD FORECAST CSV FILES
-# -----------------------------
-sarima_forecast = pd.read_csv("sarima_forecast.csv")
-arima_forecast = pd.read_csv("arima_forecast.csv")
-hw_forecast = pd.read_csv("hw_forecast.csv")
-prophet_forecast = pd.read_csv("prophet_forecast.csv")
+y = df["TOURIST ARRIVALS"]
+last_date = df.index[-1]
 
 # -----------------------------
-# FIX FORECAST EXTRACTION (IMPORTANT)
+# MODEL FIT (ONCE)
 # -----------------------------
-def get_forecast_values(df):
-    # Your SARIMA file uses "predicted_mean"
-    if "predicted_mean" in df.columns:
-        return df["predicted_mean"].values
+sarima_model = SARIMAX(y, order=(1,0,1), seasonal_order=(1,1,1,12)).fit(disp=False)
+arima_model = ARIMA(y, order=(1,1,1)).fit()
 
-    # Prophet or cleaned CSVs
-    if "Forecast" in df.columns:
-        return df["Forecast"].values
+hw_model = ExponentialSmoothing(
+    y, trend="add", seasonal="add", seasonal_periods=12
+).fit()
 
-    # fallback (safe)
-    return df.iloc[:, 1].values if df.shape[1] > 1 else df.iloc[:, 0].values
+prophet_df = pd.DataFrame({"ds": df.index, "y": y.values})
+prophet_model = Prophet()
+prophet_model.fit(prophet_df)
 
 # -----------------------------
-# SIDEBAR
+# FORECAST FUNCTION
 # -----------------------------
-st.sidebar.title("Navigation")
+def generate_forecast(months_ahead, model_name):
+
+    if model_name == "SARIMA":
+        return sarima_model.forecast(months_ahead)
+
+    elif model_name == "ARIMA":
+        return arima_model.forecast(months_ahead)
+
+    elif model_name == "Holt-Winters":
+        return hw_model.forecast(months_ahead)
+
+    else:
+        future = prophet_model.make_future_dataframe(months_ahead, freq="MS")
+        pred = prophet_model.predict(future)
+        return pred["yhat"].tail(months_ahead)
+
+# -----------------------------
+# SIDEBAR NAVIGATION
+# -----------------------------
 page = st.sidebar.radio(
-    "Go to",
-    ["Dataset Overview", "Model Comparison", "Forecasting", "Conclusion"]
+    "📍 Navigation",
+    ["🏠 Main Forecast", "📊 Dashboard (2026–2027)", "📋 Metrics", "📌 Conclusion"]
 )
 
 # -----------------------------
-# PAGE 1: DATASET
+# MAIN PAGE (FORECASTING)
 # -----------------------------
-if page == "Dataset Overview":
-    st.header("📌 Dataset Overview")
+if page == "🏠 Main Forecast":
 
-    st.dataframe(df)
+    st.title("📊 Kenya Tourism Forecasting System")
+
+    model_choice = st.selectbox(
+        "Select Model",
+        ["SARIMA", "ARIMA", "Holt-Winters", "Prophet"]
+    )
+
+    forecast_date = st.date_input("Select Forecast Month")
+
+    if st.button("Generate Forecast"):
+
+        months_ahead = (
+            (forecast_date.year - last_date.year) * 12 +
+            (forecast_date.month - last_date.month)
+        )
+
+        if months_ahead <= 0:
+            st.error("Choose a future date")
+        else:
+
+            forecast = generate_forecast(months_ahead, model_choice)
+
+            prediction = forecast.iloc[-1]
+
+            st.metric("Forecast", f"{prediction:,.0f}")
+
+            future_dates = pd.date_range(
+                last_date + pd.DateOffset(months=1),
+                periods=months_ahead,
+                freq="MS"
+            )
+
+            result = pd.DataFrame({
+                "Date": future_dates,
+                "Forecast": forecast.values
+            })
+
+            st.dataframe(result)
+
+            fig, ax = plt.subplots()
+            ax.plot(result["Date"], result["Forecast"], marker="o")
+            ax.set_title(f"{model_choice} Forecast")
+            st.pyplot(fig)
+
+# -----------------------------
+# DASHBOARD PAGE (2026–2027)
+# -----------------------------
+elif page == "📊 Dashboard (2026–2027)":
+
+    st.title("📈 Forecast Overview (2026–2027)")
+
+    forecast = sarima_model.forecast(24)
+
+    future_dates = pd.date_range(
+        start=last_date + pd.DateOffset(months=1),
+        periods=24,
+        freq="MS"
+    )
 
     fig, ax = plt.subplots()
-    ax.plot(df.index, df.iloc[:, 0])
-    ax.set_title("Monthly Tourist Arrivals (2019–2023)")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Arrivals")
+    ax.plot(future_dates, forecast)
+    ax.set_title("Tourism Forecast 2026–2027 (SARIMA)")
     st.pyplot(fig)
 
-    st.write(df.iloc[:, 0].describe())
+# -----------------------------
+# METRICS PAGE
+# -----------------------------
+elif page == "📋 Metrics":
 
-# -----------------------------
-# PAGE 2: MODEL COMPARISON
-# -----------------------------
-elif page == "Model Comparison":
-    st.header("📊 Model Performance Comparison")
+    st.title("📊 Model Performance Metrics")
 
     metrics = pd.DataFrame({
         "Model": ["SARIMA", "Holt-Winters", "ARIMA", "Prophet"],
@@ -90,98 +197,19 @@ elif page == "Model Comparison":
 
     st.dataframe(metrics)
 
-    st.success("🏆 Best Model: SARIMA")
-
-    fig, ax = plt.subplots()
-    ax.bar(metrics["Model"], metrics["MAPE (%)"])
-    ax.set_title("MAPE Comparison")
-    ax.set_ylabel("MAPE (%)")
-    st.pyplot(fig)
-
 # -----------------------------
-# PAGE 3: FORECASTING
+# CONCLUSION PAGE
 # -----------------------------
-elif page == "Forecasting":
-    st.header("🔮 Forecasting Section")
+elif page == "📌 Conclusion":
 
-    model_choice = st.selectbox(
-        "Select Model",
-        ["SARIMA", "ARIMA", "Prophet", "Holt-Winters"]
-    )
-
-    periods = st.slider("Forecast Horizon (Months)", 1, 24, 12)
-
-    if st.button("Generate Forecast"):
-
-        # -------------------------
-        # SELECT FORECAST DATA
-        # -------------------------
-        if model_choice == "SARIMA":
-            forecast = get_forecast_values(sarima_forecast)
-
-        elif model_choice == "ARIMA":
-            forecast = get_forecast_values(arima_forecast)
-
-        elif model_choice == "Holt-Winters":
-            forecast = get_forecast_values(hw_forecast)
-
-        else:
-            forecast = get_forecast_values(prophet_forecast)
-
-        # -------------------------
-        # CREATE FUTURE DATES
-        # -------------------------
-        future_dates = pd.date_range(
-            start=df.index[-1] + pd.DateOffset(months=1),
-            periods=periods,
-            freq='MS'
-        )
-
-        # -------------------------
-        # BUILD RESULT TABLE
-        # -------------------------
-        result = pd.DataFrame({
-            "Date": future_dates,
-            "Forecast": forecast[:periods]
-        })
-
-        st.subheader(f"{model_choice} Forecast Results")
-        st.dataframe(result)
-
-        # -------------------------
-        # PLOT
-        # -------------------------
-        fig, ax = plt.subplots()
-        ax.plot(result["Date"], result["Forecast"], marker="o")
-        ax.set_title(f"{model_choice} Forecast")
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Tourist Arrivals")
-        plt.xticks(rotation=45)
-        st.pyplot(fig)
-
-        # -------------------------
-        # DOWNLOAD
-        # -------------------------
-        csv = result.to_csv(index=False)
-
-        st.download_button(
-            "📥 Download Forecast CSV",
-            csv,
-            "forecast.csv",
-            "text/csv"
-        )
-
-# -----------------------------
-# PAGE 4: CONCLUSION
-# -----------------------------
-elif page == "Conclusion":
-    st.header("📌 Key Findings")
+    st.title("📌 Conclusion")
 
     st.markdown("""
-- SARIMA performed best with lowest error (MAPE = 5.57%)
-- Holt-Winters captured seasonality well
-- ARIMA underperformed due to weak seasonal handling
-- Prophet struggled with small dataset size
-""")
+    - SARIMA performed best across all metrics  
+    - Tourism data shows strong seasonality  
+    - Holt-Winters performed moderately well  
+    - ARIMA and Prophet underperformed  
 
-### 🏆 Final Decision:
+    ### 🏆 Final Recommendation:
+    **SARIMA is the best model for forecasting tourism arrivals in Kenya**
+    """)
