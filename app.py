@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import pickle
 import matplotlib.pyplot as plt
 
 # -----------------------------
@@ -12,7 +11,7 @@ st.set_page_config(
 )
 
 st.title("📊 Kenya Tourism Forecasting Dashboard")
-st.write("A comparison of ARIMA, SARIMA, Prophet, and Holt-Winters models for forecasting international tourist arrivals.")
+st.write("Comparison of ARIMA, SARIMA, Prophet, and Holt-Winters forecasting models.")
 
 # -----------------------------
 # LOAD DATA
@@ -28,11 +27,21 @@ def load_data():
 df = load_data()
 
 # -----------------------------
-# LOAD MODELS
+# LOAD FORECASTS (CSV ONLY - STABLE)
 # -----------------------------
 sarima_forecast = pd.read_csv("sarima_forecast.csv")
 arima_forecast = pd.read_csv("arima_forecast.csv")
 hw_forecast = pd.read_csv("hw_forecast.csv")
+prophet_forecast = pd.read_csv("prophet_forecast.csv")
+
+# Ensure correct column name fallback
+def get_forecast(df):
+    if "Forecast" in df.columns:
+        return df["Forecast"].values
+    elif df.shape[1] >= 1:
+        return df.iloc[:, 0].values
+    else:
+        return []
 
 # -----------------------------
 # SIDEBAR MENU
@@ -53,15 +62,16 @@ if page == "Dataset Overview":
     st.dataframe(df)
 
     st.subheader("Tourist Arrivals Trend")
+
     fig, ax = plt.subplots()
-    ax.plot(df.index, df["TOURIST ARRIVALS"])
+    ax.plot(df.index, df.iloc[:, 0])
     ax.set_title("Monthly Tourist Arrivals (2019–2023)")
     ax.set_xlabel("Year")
     ax.set_ylabel("Arrivals")
     st.pyplot(fig)
 
     st.subheader("Summary Statistics")
-    st.write(df["TOURIST ARRIVALS"].describe())
+    st.write(df.iloc[:, 0].describe())
 
 # -----------------------------
 # PAGE 2: MODEL COMPARISON
@@ -78,11 +88,11 @@ elif page == "Model Comparison":
 
     st.dataframe(metrics)
 
-    st.success("🏆 Best Performing Model: SARIMA (Lowest error across all metrics)")
+    st.success("🏆 Best Performing Model: SARIMA")
 
     fig, ax = plt.subplots()
     ax.bar(metrics["Model"], metrics["MAPE (%)"])
-    ax.set_title("MAPE Comparison Across Models")
+    ax.set_title("MAPE Comparison")
     ax.set_ylabel("MAPE (%)")
     st.pyplot(fig)
 
@@ -102,30 +112,26 @@ elif page == "Forecasting":
     if st.button("Generate Forecast"):
 
         if model_choice == "SARIMA":
-            forecast = sarima_forecast["Forecast"].values
+            forecast = get_forecast(sarima_forecast)
+
         elif model_choice == "ARIMA":
-            forecast = arima_model.forecast(steps=periods)
+            forecast = get_forecast(arima_forecast)
 
         elif model_choice == "Holt-Winters":
-            forecast = hw_model.forecast(steps=periods)
+            forecast = get_forecast(hw_forecast)
 
         else:
-            future = prophet_model.make_future_dataframe(periods=periods, freq='MS')
-            forecast_df = prophet_model.predict(future)
-            forecast = forecast_df[['ds', 'yhat']].tail(periods)
-            forecast.index = forecast['ds']
-            forecast = forecast['yhat']
+            forecast = get_forecast(prophet_forecast)
 
-        # Create future index
         future_dates = pd.date_range(
             start=df.index[-1],
-            periods=periods+1,
+            periods=periods + 1,
             freq='MS'
         )[1:]
 
         result = pd.DataFrame({
             "Date": future_dates,
-            "Forecast": forecast.values
+            "Forecast": forecast[:periods]
         })
 
         st.subheader(f"{model_choice} Forecast Results")
@@ -154,11 +160,13 @@ elif page == "Conclusion":
     st.header("📌 Key Findings")
 
     st.markdown("""
-    - SARIMA performed best with the lowest error (MAPE = 5.57%)
-    - Holt-Winters was second best due to smoothing capability
-    - ARIMA and Prophet performed poorly due to stronger seasonal patterns in the data
-    - Monthly tourism data shows clear seasonality, making SARIMA most suitable
+- SARIMA performed best with lowest error (MAPE = 5.57%)
+- Holt-Winters captured smoothing effects well
+- ARIMA underperformed due to seasonality
+- Prophet was less effective for small yearly dataset
 
-    ### 🏆 Final Decision:
+### 🏆 Final Decision:
+**SARIMA is the recommended model for forecasting tourism arrivals in Kenya.**
+""")
     **SARIMA is the recommended model for forecasting tourism arrivals in Kenya.**
     """)
