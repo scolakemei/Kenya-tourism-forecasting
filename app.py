@@ -182,5 +182,6 @@ elif page == "Conclusion":
 - Holt-Winters captured seasonality well
 - ARIMA underperformed due to weak seasonal handling
 - Prophet struggled with small dataset size
+""")
 
 ### 🏆 Final Decision:
