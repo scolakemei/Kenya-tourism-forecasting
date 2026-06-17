@@ -30,10 +30,9 @@ df = load_data()
 # -----------------------------
 # LOAD MODELS
 # -----------------------------
-arima_model = pickle.load(open("arima.pkl", "rb"))
-sarima_model = pickle.load(open("sarima.pkl", "rb"))
-prophet_model = pickle.load(open("prophet.pkl", "rb"))
-hw_model = pickle.load(open("holtwinters.pkl", "rb"))
+sarima_forecast = pd.read_csv("sarima_forecast.csv")
+arima_forecast = pd.read_csv("arima_forecast.csv")
+hw_forecast = pd.read_csv("hw_forecast.csv")
 
 # -----------------------------
 # SIDEBAR MENU
@@ -103,8 +102,7 @@ elif page == "Forecasting":
     if st.button("Generate Forecast"):
 
         if model_choice == "SARIMA":
-            forecast = sarima_model.forecast(steps=periods)
-
+            forecast = sarima_forecast["Forecast"].values
         elif model_choice == "ARIMA":
             forecast = arima_model.forecast(steps=periods)
 
