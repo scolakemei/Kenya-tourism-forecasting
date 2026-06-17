@@ -27,16 +27,27 @@ def load_data():
 df = load_data()
 
 # -----------------------------
-# LOAD FORECAST FILES (CSV ONLY)
+# LOAD FORECAST CSV FILES
 # -----------------------------
 sarima_forecast = pd.read_csv("sarima_forecast.csv")
 arima_forecast = pd.read_csv("arima_forecast.csv")
 hw_forecast = pd.read_csv("hw_forecast.csv")
 prophet_forecast = pd.read_csv("prophet_forecast.csv")
 
-# Helper function (handles column issues safely)
-def get_values(df):
-    return df.iloc[:, 0].values
+# -----------------------------
+# FIX FORECAST EXTRACTION (IMPORTANT)
+# -----------------------------
+def get_forecast_values(df):
+    # Your SARIMA file uses "predicted_mean"
+    if "predicted_mean" in df.columns:
+        return df["predicted_mean"].values
+
+    # Prophet or cleaned CSVs
+    if "Forecast" in df.columns:
+        return df["Forecast"].values
+
+    # fallback (safe)
+    return df.iloc[:, 1].values if df.shape[1] > 1 else df.iloc[:, 0].values
 
 # -----------------------------
 # SIDEBAR
@@ -103,19 +114,19 @@ elif page == "Forecasting":
     if st.button("Generate Forecast"):
 
         # -------------------------
-        # SELECT FORECAST VALUES
+        # SELECT FORECAST DATA
         # -------------------------
         if model_choice == "SARIMA":
-            forecast = get_values(sarima_forecast)
+            forecast = get_forecast_values(sarima_forecast)
 
         elif model_choice == "ARIMA":
-            forecast = get_values(arima_forecast)
+            forecast = get_forecast_values(arima_forecast)
 
         elif model_choice == "Holt-Winters":
-            forecast = get_values(hw_forecast)
+            forecast = get_forecast_values(hw_forecast)
 
         else:
-            forecast = get_values(prophet_forecast)
+            forecast = get_forecast_values(prophet_forecast)
 
         # -------------------------
         # CREATE FUTURE DATES
@@ -127,7 +138,7 @@ elif page == "Forecasting":
         )
 
         # -------------------------
-        # FINAL RESULT TABLE
+        # BUILD RESULT TABLE
         # -------------------------
         result = pd.DataFrame({
             "Date": future_dates,
@@ -168,10 +179,11 @@ elif page == "Conclusion":
 
     st.markdown("""
 - SARIMA performed best with lowest error (MAPE = 5.57%)
-- Holt-Winters captured smoothing effects well
-- ARIMA underperformed due to seasonality
-- Prophet struggled with small seasonal dataset
+- Holt-Winters captured seasonality well
+- ARIMA underperformed due to weak seasonal handling
+- Prophet struggled with small dataset size
 
 ### 🏆 Final Decision:
-**SARIMA is the recommended model for forecasting tourism arrivals in Kenya.**
+**SARIMA is the recommended model for Kenya tourism forecasting.**
+""")g tourism arrivals in Kenya.**
 """)
