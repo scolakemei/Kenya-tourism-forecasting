@@ -92,6 +92,11 @@ st.markdown(
         font-weight: bold;
     }
 
+    /* SLIDER */
+    div[data-testid="stSlider"] * {
+        color: white !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True
@@ -140,6 +145,27 @@ def peek_columns(file_bytes: bytes, filename: str):
     else:
         raw = pd.read_excel(io.BytesIO(file_bytes))
     return list(raw.columns)
+
+
+@st.cache_data
+def load_pbi_purpose_data():
+    """
+    Loads the purpose-of-visit breakdown, annual summary, and scenario
+    slicer values that originally lived inside the Power BI data model
+    (FORECASTING_SARIMA.pbix). These were extracted once from the .pbix
+    and saved as PBI_PURPOSE_SCENARIO_DATA.xlsx, which must sit next to
+    this script (same folder as TOURIST_ARRIVALS_DATA.xlsx).
+    """
+    hist = pd.read_excel("PBI_PURPOSE_SCENARIO_DATA.xlsx", sheet_name="HISTORICAL_PURPOSE")
+    fcst = pd.read_excel("PBI_PURPOSE_SCENARIO_DATA.xlsx", sheet_name="FORECAST")
+    scenario_opts = pd.read_excel("PBI_PURPOSE_SCENARIO_DATA.xlsx", sheet_name="SCENARIO_OPTIONS")
+    annual = pd.read_excel("PBI_PURPOSE_SCENARIO_DATA.xlsx", sheet_name="ANNUAL_SUMMARY")
+
+    hist["DATE"] = pd.to_datetime(hist["DATE"])
+    fcst["DATE"] = pd.to_datetime(fcst["DATE"])
+    annual["YEAR"] = pd.to_datetime(annual["YEAR"]).dt.year
+
+    return hist, fcst, scenario_opts, annual
 
 
 # -----------------------------
@@ -258,7 +284,13 @@ def forecast_model(steps, name):
 # -----------------------------
 page = st.sidebar.radio(
     "📍 Navigation",
-    ["🏠 Forecasting", "📊 Dashboard (2026–2027)", "📋 Metrics", "📌 Conclusion"]
+    [
+        "🏠 Forecasting",
+        "📊 Dashboard (2026–2027)",
+        "🥧 Purpose & Scenario",
+        "📋 Metrics",
+        "📌 Conclusion",
+    ]
 )
 
 # ============================================================
@@ -584,7 +616,156 @@ elif page == "📊 Dashboard (2026–2027)":
     )
 
 # ============================================================
-# PAGE 3 — METRICS
+# PAGE 3 — PURPOSE & SCENARIO (Power BI replica, fully live)
+# ============================================================
+elif page == "🥧 Purpose & Scenario":
+
+    st.title("🥧 Purpose of Visit & Scenario Simulator")
+    st.caption(
+        "Rebuilt from the FORECASTING_SARIMA.pbix data model — same tables, "
+        "same DAX logic, now live in Streamlit instead of a static Power BI canvas."
+    )
+
+    try:
+        hist_p, fcst_p, scenario_opts, annual_p = load_pbi_purpose_data()
+    except FileNotFoundError:
+        st.error(
+            "PBI_PURPOSE_SCENARIO_DATA.xlsx was not found next to this script. "
+            "Place it in the same folder as TOURIST_ARRIVALS_DATA.xlsx and reload."
+        )
+        st.stop()
+
+    # ── KPI CARDS (mirrors the four PBI cardVisuals) ────────
+    actual_2025 = hist_p.loc[hist_p["Year"] == 2025, "HISTORICAL VALUES"].sum()
+    forecast_2026 = fcst_p.loc[fcst_p["Year"] == 2026, "FORECAST VALUES"].sum()
+    forecast_growth_pct = (forecast_2026 - actual_2025) / actual_2025 * 100
+
+    peak_year_row = annual_p.loc[annual_p["TOURIST ARRIVALS"].idxmax()]
+    peak_year = int(peak_year_row["YEAR"])
+
+    purpose_totals = {
+        "Holiday": hist_p["HOLIDAY"].sum(),
+        "Business": hist_p["BUSINESS"].sum(),
+        "VFR": hist_p["VFR"].sum(),
+        "Others": hist_p["OTHERS"].sum(),
+    }
+    best_purpose = max(purpose_totals, key=purpose_totals.get)
+    total_arrivals_all_time = hist_p["HISTORICAL VALUES"].sum()
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("🧮 Total Arrivals", f"{total_arrivals_all_time:,.0f}", "2019–2025")
+    k2.metric("📈 Forecast Growth %", f"{forecast_growth_pct:+.1f}%", "2026 forecast vs 2025 actual")
+    k3.metric("🏆 Peak Year", str(peak_year), f"{peak_year_row['TOURIST ARRIVALS']:,.0f} arrivals")
+    k4.metric("🎯 Dominant Purpose", best_purpose, f"{purpose_totals[best_purpose]:,.0f} total")
+
+    st.divider()
+
+    col_a, col_b = st.columns(2)
+
+    # ── LEFT: 100% stacked annual purpose chart ─────────────
+    with col_a:
+        st.subheader("📊 Purpose of Visit — Annual Stacked (2019–2025)")
+
+        annual_purpose = hist_p.groupby("Year")[["HOLIDAY", "BUSINESS", "VFR", "OTHERS"]].sum()
+        annual_purpose_pct = annual_purpose.div(annual_purpose.sum(axis=1), axis=0) * 100
+        year_labels = annual_purpose_pct.index.astype(int).astype(str)
+
+        colors = {"HOLIDAY": "#00A6FB", "BUSINESS": "#003B73", "VFR": "#4FC3F7", "OTHERS": "#FFD166"}
+
+        fig_stack = go.Figure()
+        for col in ["HOLIDAY", "BUSINESS", "VFR", "OTHERS"]:
+            fig_stack.add_trace(go.Bar(
+                name=col.title(),
+                x=year_labels,
+                y=annual_purpose_pct[col],
+                marker_color=colors[col],
+                hovertemplate=f"%{{x}} {col.title()}: <b>%{{y:.1f}}%</b><extra></extra>"
+            ))
+        fig_stack.update_layout(
+            barmode="stack",
+            template="plotly_white",
+            yaxis_title="Share of Arrivals (%)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            height=380,
+            margin=dict(t=20, b=40)
+        )
+        st.plotly_chart(fig_stack, use_container_width=True)
+
+    # ── RIGHT: donut share of purpose, full period ──────────
+    with col_b:
+        st.subheader("🥧 Purpose Share — Full Period (2019–2025)")
+
+        fig_donut = go.Figure(go.Pie(
+            labels=list(purpose_totals.keys()),
+            values=list(purpose_totals.values()),
+            hole=0.55,
+            marker=dict(colors=["#00A6FB", "#003B73", "#4FC3F7", "#FFD166"]),
+            hovertemplate="%{label}: <b>%{percent}</b><extra></extra>"
+        ))
+        fig_donut.update_layout(
+            template="plotly_white",
+            height=380,
+            margin=dict(t=20, b=40),
+            showlegend=True
+        )
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+    st.divider()
+
+    # ── SCENARIO SIMULATOR (replaces the static PBI slicer) ─
+    st.subheader("🎛️ Scenario Simulator — 2026 Growth Impact")
+    st.caption(
+        "In Power BI this was a fixed slicer (-30% to +30%). Here it's a live "
+        "Streamlit slider that recalculates the scenario instantly as you drag it."
+    )
+
+    growth_options = sorted(scenario_opts["Growth Impact"].tolist())
+
+    growth_pct = st.slider(
+        "Growth Impact (%)",
+        min_value=int(min(growth_options)),
+        max_value=int(max(growth_options)),
+        value=0,
+        step=10
+    )
+
+    base_2026 = actual_2025 * 1.05
+    scenario_2026 = actual_2025 * (1 + growth_pct / 100)
+
+    s1, s2, s3 = st.columns(3)
+    s1.metric("2025 Actual", f"{actual_2025:,.0f}")
+    s2.metric("2026 Base (+5%)", f"{base_2026:,.0f}")
+    s3.metric(
+        f"2026 Scenario ({growth_pct:+d}%)",
+        f"{scenario_2026:,.0f}",
+        f"{scenario_2026 - base_2026:+,.0f} vs base"
+    )
+
+    fig_scenario = go.Figure(go.Bar(
+        x=["2025 Actual", "2026 Base", "2026 Scenario"],
+        y=[actual_2025, base_2026, scenario_2026],
+        marker_color=["#4FC3F7", "#003B73", "#00A6FB"],
+        text=[f"{v:,.0f}" for v in [actual_2025, base_2026, scenario_2026]],
+        textposition="outside",
+        hovertemplate="%{x}: <b>%{y:,.0f}</b><extra></extra>"
+    ))
+    fig_scenario.update_layout(
+        template="plotly_white",
+        yaxis_title="Tourist Arrivals",
+        height=380,
+        showlegend=False,
+        margin=dict(t=20, b=40)
+    )
+    st.plotly_chart(fig_scenario, use_container_width=True)
+
+    st.info(
+        "Formula (mirrors the original DAX measures): "
+        "**Scenario 2026 = 2025 Actual × (1 + Growth Impact %)**, "
+        "**Base 2026 = 2025 Actual × 1.05**."
+    )
+
+# ============================================================
+# PAGE 4 — METRICS
 # ============================================================
 elif page == "📋 Metrics":
 
@@ -653,7 +834,7 @@ elif page == "📋 Metrics":
     st.plotly_chart(fig_mape, use_container_width=True)
 
 # ============================================================
-# PAGE 4 — CONCLUSION
+# PAGE 5 — CONCLUSION
 # ============================================================
 elif page == "📌 Conclusion":
 
